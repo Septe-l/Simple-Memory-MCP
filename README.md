@@ -6,6 +6,8 @@
 
 HTTPで動作しDockerコンテナとして扱えるので、LLMを動かすサーバーとは別のマシンで稼働させることが可能になっています。
 
+このMCPツールを使用するには、EmbeddingモデルをLMStudioで動作させておく必要があります。
+
 このREADMEを除くすべてはClaude Codeで書かれています。
 
 ## クイックスタート
@@ -18,7 +20,8 @@ cd Simple-Memory-MCP
 docker compose up -d
 ```
 
-http://マシンのIPアドレス:ポート番号/mcp をmcp.jsonや各ツールに登録してください。
+http://マシンのIPアドレス:8080/mcp をmcp.jsonや各ツールに登録してください。
+ブラウザから http://マシンのIPアドレス:8080/webui にアクセスすることで、記憶の追加・編集・削除、各種設定が可能なWebUIにアクセス可能です。
 
 ## 仕組み
 
