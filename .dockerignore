@@ -8,6 +8,7 @@ data
 .env
 .DS_Store
 README.md
+doc
 Dockerfile
 docker-compose.yml
 .dockerignore
