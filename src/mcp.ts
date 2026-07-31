@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { MEMORY_LEVELS, memoryLevelInfo } from "./config.ts";
+import { appVersion, MEMORY_LEVELS, memoryLevelInfo } from "./config.ts";
 import type { Memory, MemoryStore } from "./db.ts";
 import { searchMemories } from "./search.ts";
 import { addMemory, indexStatus, reindex, updateMemory } from "./service.ts";
@@ -20,7 +20,7 @@ export function createMcpServer(store: MemoryStore, settings: SettingsStore): Mc
   const level = memoryLevelInfo(settings.get().memoryLevel);
 
   const server = new McpServer(
-    { name: "simple-memory-mcp", version: "2.1.0" },
+    { name: "simple-memory-mcp", version: appVersion },
     {
       instructions: [
         "ユーザーに関する長期記憶を保存・検索するサーバーです。日本語と英語の両方に対応しています。",

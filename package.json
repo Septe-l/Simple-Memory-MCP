@@ -1,6 +1,6 @@
 {
   "name": "simple-memory-mcp",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "LM Studio 向けの長期記憶 MCP サーバー (Streamable HTTP) + 記憶管理 WebUI",
   "type": "module",
   "private": true,

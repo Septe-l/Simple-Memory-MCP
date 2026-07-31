@@ -1,7 +1,18 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+/** バージョンは package.json だけを正とし、二重管理でずれないようにする。 */
+export const appVersion: string = (() => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8")) as { version?: string };
+    return pkg.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+})();
 
 function resolveFromRoot(p: string): string {
   return path.isAbsolute(p) ? p : path.join(rootDir, p);
