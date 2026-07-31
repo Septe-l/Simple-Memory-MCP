@@ -1,0 +1,25 @@
+{
+  "name": "simple-memory-mcp",
+  "version": "2.0.0",
+  "description": "LM Studio 向けの長期記憶 MCP サーバー (Streamable HTTP) + 記憶管理 WebUI",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "dev": "node --watch src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "express": "^5.2.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.2",
+    "typescript": "^5.9.3"
+  }
+}

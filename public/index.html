@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Simple-Memory-MCP — 記憶の管理</title>
+    <link rel="stylesheet" href="style.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>"
+    />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <h1>🧠 Simple-Memory-MCP</h1>
+        <div class="topbar-right">
+          <div class="status" id="status">
+            <span class="dot" id="statusDot"></span>
+            <span id="statusText">接続を確認中…</span>
+          </div>
+          <button id="settingsToggle" class="ghost">⚙ 設定</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- 設定パネル -->
+      <section class="card hidden" id="settingsPanel">
+        <h2>埋め込みバックエンドの設定</h2>
+        <p class="muted note">
+          記憶のベクトル化に使うサーバーとモデルです。別マシンで動かす場合は URL をそのマシンのアドレスに変えてください。<br />
+          <strong>主空間</strong>には多言語モデルを 1 つ置けば日本語・英語の両方をカバーできます。<strong>副空間</strong>は、
+          特定の言語に強いモデルを別サーバーで併用したいときだけ有効にしてください（両方を有効にすると
+          1 つの記憶が両方の空間に索引されます）。
+        </p>
+        <div id="spaceEditors"></div>
+
+        <div class="memory-level">
+          <div class="level-head">
+            <span class="level-title">会話内容を記憶する度合い</span>
+            <strong id="levelLabel"></strong>
+          </div>
+          <input id="memoryLevel" type="range" min="1" max="5" step="1" list="levelTicks" />
+          <datalist id="levelTicks">
+            <option value="1"></option>
+            <option value="2"></option>
+            <option value="3"></option>
+            <option value="4"></option>
+            <option value="5"></option>
+          </datalist>
+          <div class="level-scale">
+            <span>重要な話題のみ</span>
+            <span>細かいことまで</span>
+          </div>
+          <p class="muted level-guidance" id="levelGuidance"></p>
+        </div>
+
+        <div class="weights">
+          <label class="field">
+            <span>意味検索の重み</span>
+            <input id="semanticWeight" type="number" min="0" max="5" step="0.05" />
+          </label>
+          <label class="field">
+            <span>キーワード検索の重み</span>
+            <input id="keywordWeight" type="number" min="0" max="5" step="0.05" />
+          </label>
+        </div>
+
+        <div class="system-prompt">
+          <div class="level-head">
+            <span class="level-title">LM Studio の System Prompt（推奨）</span>
+            <button type="button" id="copyPrompt" class="ghost">コピー</button>
+          </div>
+          <p class="muted note">
+            MCP のツール説明を読まずに記憶を参照しないモデルが多いため、これを LM Studio のチャット設定の
+            System Prompt に貼ると、記憶を積極的に拾うようになります。上の記憶レベルに合わせて内容が変わります。
+          </p>
+          <textarea id="systemPrompt" rows="8" readonly></textarea>
+        </div>
+
+        <div class="row settings-actions">
+          <button id="saveSettings" class="primary">設定を保存</button>
+          <button id="reindexBtn" class="ghost">埋め込みを再生成</button>
+          <button id="reindexForceBtn" class="ghost">全件を強制再生成</button>
+          <button id="resetSettings" class="ghost" title="環境変数 / docker compose の既定値に戻します">
+            既定値に戻す
+          </button>
+          <span class="muted" id="indexInfo"></span>
+        </div>
+      </section>
+
+      <!-- 追加フォーム -->
+      <section class="card">
+        <h2>記憶を追加</h2>
+        <form id="addForm">
+          <textarea
+            id="addContent"
+            rows="3"
+            placeholder="後から読んで意味が分かる完結した文で書いてください（例: ユーザーは自宅の開発機として MacBook Pro M3 を使っている）"
+            required
+          ></textarea>
+          <div class="row">
+            <input id="addTags" type="text" placeholder="タグ（カンマ区切り／例: 好み, 開発環境）" />
+            <label class="importance">
+              重要度
+              <select id="addImportance">
+                <option value="1">1 — 参考程度</option>
+                <option value="2">2</option>
+                <option value="3" selected>3 — 標準</option>
+                <option value="4">4</option>
+                <option value="5">5 — 最重要</option>
+              </select>
+            </label>
+            <button type="submit" class="primary" id="addSubmit">追加</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- 検索 -->
+      <section class="card">
+        <div class="search-row">
+          <input
+            id="searchInput"
+            type="search"
+            placeholder="記憶を検索（日本語・英語どちらでもOK。空欄なら新しい順に一覧）"
+            autocomplete="off"
+          />
+          <select id="sortSelect" title="並び順（一覧表示のとき有効）">
+            <option value="recent">更新が新しい順</option>
+            <option value="importance">重要度順</option>
+            <option value="accessed">最近参照した順</option>
+          </select>
+        </div>
+        <div class="tagbar" id="tagbar"></div>
+        <div class="toolbar">
+          <span id="resultInfo" class="muted">読み込み中…</span>
+          <div class="toolbar-actions">
+            <label class="checkbox"><input type="checkbox" id="selectAll" /> 全選択</label>
+            <button id="bulkDelete" class="danger" disabled>選択した記憶を削除</button>
+          </div>
+        </div>
+      </section>
+
+      <ul id="results" class="results"></ul>
+      <div id="emptyState" class="empty hidden"></div>
+      <div class="pager hidden" id="pager">
+        <button id="prevPage" class="ghost">← 前へ</button>
+        <span id="pageInfo" class="muted"></span>
+        <button id="nextPage" class="ghost">次へ →</button>
+      </div>
+    </main>
+
+    <div id="toasts" class="toasts"></div>
+
+    <template id="spaceTemplate">
+      <div class="space-editor">
+        <div class="space-head">
+          <label class="checkbox space-enabled"><input type="checkbox" /> <strong class="space-title"></strong></label>
+          <span class="badge space-status">未確認</span>
+        </div>
+        <div class="space-fields">
+          <label class="field">
+            <span>サーバー URL</span>
+            <input class="space-url" type="text" placeholder="http://192.168.1.20:1234/v1" />
+          </label>
+          <label class="field">
+            <span>モデル</span>
+            <span class="model-row">
+              <input class="space-model" type="text" list="" placeholder="ruri-v3-310m" />
+              <button type="button" class="ghost fetch-models" title="サーバーからモデル一覧を取得">一覧</button>
+            </span>
+            <datalist class="space-models"></datalist>
+          </label>
+          <label class="field">
+            <span>モデルの対応言語</span>
+            <select class="space-language">
+              <option value="multilingual">多言語（日英どちらも）</option>
+              <option value="ja">日本語特化</option>
+              <option value="en">英語特化</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>クエリ接頭辞</span>
+            <input class="space-qprefix" type="text" placeholder="query: " />
+          </label>
+          <label class="field">
+            <span>文書接頭辞</span>
+            <input class="space-dprefix" type="text" placeholder="passage: " />
+          </label>
+        </div>
+        <div class="row">
+          <button type="button" class="ghost test-space">接続テスト</button>
+          <span class="muted space-detail"></span>
+        </div>
+      </div>
+    </template>
+
+    <template id="itemTemplate">
+      <li class="item">
+        <div class="item-head">
+          <label class="checkbox"><input type="checkbox" class="item-select" /></label>
+          <div class="badges">
+            <span class="badge importance-badge"></span>
+            <span class="badge score-badge hidden"></span>
+            <span class="badge warn-badge hidden" title="この記憶はまだベクトル化されていません">未索引</span>
+          </div>
+          <div class="item-actions">
+            <button class="ghost edit-btn">編集</button>
+            <button class="danger delete-btn">削除</button>
+          </div>
+        </div>
+        <p class="content"></p>
+        <div class="tags"></div>
+        <div class="meta muted"></div>
+        <form class="edit-form hidden">
+          <textarea class="edit-content" rows="3"></textarea>
+          <div class="row">
+            <input class="edit-tags" type="text" placeholder="タグ（カンマ区切り）" />
+            <label class="importance">
+              重要度
+              <select class="edit-importance">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+            </label>
+            <button type="submit" class="primary">保存</button>
+            <button type="button" class="ghost cancel-btn">キャンセル</button>
+          </div>
+        </form>
+      </li>
+    </template>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+node_modules/
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.env
+.DS_Store
+
+# Claude Code のローカル設定 (マシン固有のパスを含む)
+.claude/settings.local.json

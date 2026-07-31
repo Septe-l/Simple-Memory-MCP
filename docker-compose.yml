@@ -1,0 +1,52 @@
+services:
+  simple-memory-mcp:
+    build: .
+    image: simple-memory-mcp:latest
+    container_name: simple-memory-mcp
+    restart: unless-stopped
+
+    ports:
+      # WebUI : http://<このホスト>:8080/webui
+      # MCP   : http://<このホスト>:8080/mcp
+      - "${MEMORY_MCP_PORT:-8080}:8080"
+
+    volumes:
+      # 記憶の実体。コンテナを作り直しても消えないよう名前付き volume にする
+      - memory-data:/data
+
+    environment:
+      # --- 埋め込みバックエンド (初回起動時の既定値) ---
+      #
+      # ⚠ ここの値が使われるのは「設定がまだ保存されていないとき」だけ。
+      #    一度 WebUI で保存すると DB の値が優先される。
+      #    compose を書き換えて反映したいときは、WebUI の「既定値に戻す」を押すこと。
+      #
+      # コンテナからホストの LM Studio を見るには host.docker.internal を使う。
+      # 別マシン (例: Mac mini の Embedding 専用機) なら http://192.168.x.x:1234/v1 のように書く。
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-http://host.docker.internal:1234/v1}
+
+      # 主空間: 多言語モデル 1 つで日本語・英語の両方をカバーする
+      EMBEDDING_PRIMARY_MODEL: ${EMBEDDING_PRIMARY_MODEL:-text-embedding-multilingual-e5-large-instruct}
+      EMBEDDING_PRIMARY_LANGUAGE: ${EMBEDDING_PRIMARY_LANGUAGE:-multilingual}
+
+      # 副空間: 言語特化モデルを併用したいときだけ有効にする (既定は無効)
+      EMBEDDING_SECONDARY_ENABLED: ${EMBEDDING_SECONDARY_ENABLED:-false}
+      EMBEDDING_SECONDARY_MODEL: ${EMBEDDING_SECONDARY_MODEL:-text-embedding-nomic-embed-text-v1.5}
+      EMBEDDING_SECONDARY_LANGUAGE: ${EMBEDDING_SECONDARY_LANGUAGE:-en}
+
+      # 空間ごとに別のサーバーを使う場合はこちらで上書きする
+      # (例: Embedding 専用の Mac mini で llama-server を動かす)
+      # EMBEDDING_PRIMARY_BASE_URL: http://192.168.1.20:1234/v1
+      # EMBEDDING_SECONDARY_BASE_URL: http://192.168.1.30:8081/v1
+
+      # 会話内容を記憶する度合い (1: 核心のみ 〜 5: ほぼ全部)。WebUI から変更可能
+      MEMORY_LEVEL: ${MEMORY_LEVEL:-3}
+
+      TZ: ${TZ:-Asia/Tokyo}
+
+    extra_hosts:
+      # Linux でも host.docker.internal でホストに届くようにする
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  memory-data:
