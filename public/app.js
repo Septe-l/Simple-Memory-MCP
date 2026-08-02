@@ -638,9 +638,51 @@ els.nextPage.addEventListener("click", () => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
+/* ---------- PWA ---------- */
+
+// マニフェストの shortcuts から起動されたときの初期表示
+function applyLaunchParams() {
+  const params = new URLSearchParams(location.search);
+  if (params.get("panel") === "settings") {
+    els.settingsPanel.classList.remove("hidden");
+  }
+  if (params.get("focus") === "search") {
+    els.searchInput.focus();
+  }
+}
+
+async function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  // Service Worker は安全なコンテキスト (https か localhost) でしか登録できない。
+  // LAN の IP に http で繋いでいる場合はここで諦める。
+  if (!window.isSecureContext) {
+    console.info("[pwa] 安全なコンテキストではないため Service Worker を登録しません:", location.origin);
+    return;
+  }
+
+  try {
+    const reg = await navigator.serviceWorker.register("sw.js", { scope: "./" });
+
+    // 新しい版が待機状態になったら、再読み込みを促す
+    reg.addEventListener("updatefound", () => {
+      const installing = reg.installing;
+      if (!installing) return;
+      installing.addEventListener("statechange", () => {
+        if (installing.state === "installed" && navigator.serviceWorker.controller) {
+          toast("新しいバージョンがあります。再読み込みしてください");
+        }
+      });
+    });
+  } catch (err) {
+    console.warn("[pwa] Service Worker の登録に失敗:", err);
+  }
+}
+
 /* ---------- 起動 ---------- */
 
+applyLaunchParams();
 await loadSettings();
 await load();
 await refreshMeta();
 await checkHealth();
+void registerServiceWorker();

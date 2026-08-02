@@ -1,0 +1,52 @@
+{
+  "name": "Simple-Memory-MCP",
+  "short_name": "Memory",
+  "description": "LLM の長期記憶を管理する WebUI。記憶の追加・検索・編集・削除ができます。",
+  "lang": "ja",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#3b6cf6",
+  "background_color": "#14161a",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "記憶を検索",
+      "short_name": "検索",
+      "url": "./?focus=search"
+    },
+    {
+      "name": "設定",
+      "short_name": "設定",
+      "url": "./?panel=settings"
+    }
+  ]
+}
