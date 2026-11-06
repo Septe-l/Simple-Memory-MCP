@@ -163,7 +163,21 @@ export function memoryLevelInfo(level: number): MemoryLevelInfo {
   return MEMORY_LEVELS[clamped - 1]!;
 }
 
-const defaultBaseUrl = (process.env.EMBEDDING_BASE_URL ?? "http://localhost:1234/v1").replace(/\/+$/, "");
+/**
+ * OpenAI 互換 API のベース URL に揃える。
+ *
+ * `/v1` を付け忘れると LM Studio は存在しないパスにも「トークンが無効」と 401 を返し、
+ * 認証の問題と見分けがつかなくなるので補う。llama-server も同じ `/v1` 配下で動く。
+ */
+export function normalizeBaseUrl(raw: string): string {
+  let url = raw.trim().replace(/\/+$/, "");
+  if (!url) return url;
+  if (!/^https?:\/\//i.test(url)) url = `http://${url}`;
+  if (!/\/v1$/.test(url)) url = `${url}/v1`;
+  return url;
+}
+
+const defaultBaseUrl = normalizeBaseUrl(process.env.EMBEDDING_BASE_URL ?? "http://localhost:1234/v1");
 /**
  * 埋め込みサーバーの API トークン。空なら Authorization ヘッダを送らない。
  * LM Studio で「API トークンを要求する」設定を有効にしている場合に必要。
@@ -182,7 +196,7 @@ function spaceFromEnv(
     id,
     language: (["multilingual", "ja", "en"].includes(language) ? language : defaults.language) as SpaceLanguage,
     enabled: (process.env[`EMBEDDING_${upper}_ENABLED`] ?? String(defaults.enabled)) !== "false",
-    baseUrl: (process.env[`EMBEDDING_${upper}_BASE_URL`] ?? defaultBaseUrl).replace(/\/+$/, ""),
+    baseUrl: normalizeBaseUrl(process.env[`EMBEDDING_${upper}_BASE_URL`] ?? defaultBaseUrl),
     apiKey: (process.env[`EMBEDDING_${upper}_API_KEY`] ?? defaultApiKey).trim(),
     model,
     queryPrefix: process.env[`EMBEDDING_${upper}_QUERY_PREFIX`] ?? guessed.query,

@@ -6,6 +6,7 @@ import {
   guessPrefixes,
   MEMORY_LEVELS,
   memoryLevelInfo,
+  normalizeBaseUrl,
   recommendedSystemPrompt,
 } from "./config.ts";
 import type { MemoryStore } from "./db.ts";
@@ -55,7 +56,7 @@ const modelsSchema = z.object({
  */
 function resolveApiKey(stored: EmbeddingSpaceSettings | undefined, baseUrl: string, provided: string | undefined): string {
   if (provided !== undefined) return provided.trim();
-  return stored && stored.baseUrl === baseUrl ? stored.apiKey : "";
+  return stored && normalizeBaseUrl(stored.baseUrl) === baseUrl ? stored.apiKey : "";
 }
 
 const settingsSchema = z.object({
@@ -120,7 +121,7 @@ export function createApiRouter(store: MemoryStore, settings: SettingsStore): Ro
       res.status(404).json({ error: "その空間はありません" });
       return;
     }
-    const baseUrl = (parsed.data.baseUrl ?? current.baseUrl).trim().replace(/\/+$/, "");
+    const baseUrl = normalizeBaseUrl(parsed.data.baseUrl ?? current.baseUrl);
     res.json(
       await checkSpace({
         ...current,
@@ -147,7 +148,7 @@ export function createApiRouter(store: MemoryStore, settings: SettingsStore): Ro
       res.status(400).json({ error: z.prettifyError(parsed.error) });
       return;
     }
-    const baseUrl = parsed.data.baseUrl.trim().replace(/\/+$/, "");
+    const baseUrl = normalizeBaseUrl(parsed.data.baseUrl);
     const stored = parsed.data.id ? settings.space(parsed.data.id) : undefined;
     const apiKey = resolveApiKey(stored, baseUrl, parsed.data.apiKey);
     try {

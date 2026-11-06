@@ -7,6 +7,7 @@ import {
   MEMORY_LEVELS,
   defaultSettings,
   guessPrefixes,
+  normalizeBaseUrl,
 } from "./config.ts";
 
 const SETTINGS_KEY = "app_settings";
@@ -72,13 +73,14 @@ function coerce(raw: unknown, base: AppSettings): AppSettings {
       ? (found.language as SpaceLanguage)
       : fallback.language;
 
-    const baseUrl = str(found.baseUrl, fallback.baseUrl).trim().replace(/\/+$/, "");
+    const baseUrl = normalizeBaseUrl(str(found.baseUrl, fallback.baseUrl));
     // 接続先を変えたのにトークンが指定されていなければ、旧トークンは引き継がない。
     // 引き継ぐと、URL を書き換えるだけでトークンを別ホストへ送らせられるため。
+    // `/v1` の補完だけで「変わった」と見なさないよう、比較は正規化した同士で行う。
     const apiKey =
       found.apiKey !== undefined
         ? normalizeApiKey(str(found.apiKey, ""))
-        : baseUrl !== fallback.baseUrl
+        : baseUrl !== normalizeBaseUrl(fallback.baseUrl)
           ? ""
           : fallback.apiKey;
 

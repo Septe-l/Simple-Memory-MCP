@@ -594,6 +594,10 @@ button.danger:hover:not(:disabled) {
   border-top: 1px solid var(--border);
 }
 
+.masked {
+  -webkit-text-security: disc;
+}
+
 .apikey-note {
   font-size: 12px;
   line-height: 1.5;

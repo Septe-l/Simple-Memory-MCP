@@ -175,10 +175,11 @@ function renderSpaceEditor(space) {
     node.dataset.apiKeyDirty = "1";
     renderApiKeyNote(node);
   });
+  // type="password" はブラウザがログインフォームと見なして保存済みのパスワードで
+  // 黙って上書きすることがあるので、伏せ字は CSS (.masked) で切り替える。
   node.querySelector(".toggle-apikey").addEventListener("click", (event) => {
-    const showing = apiKeyInput.type === "text";
-    apiKeyInput.type = showing ? "password" : "text";
-    event.currentTarget.textContent = showing ? "表示" : "隠す";
+    const showing = !apiKeyInput.classList.toggle("masked");
+    event.currentTarget.textContent = showing ? "隠す" : "表示";
   });
   node.querySelector(".clear-apikey").addEventListener("click", () => {
     apiKeyInput.value = "";
