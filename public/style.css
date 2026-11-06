@@ -126,6 +126,8 @@ main {
 textarea,
 input[type="text"],
 input[type="search"],
+input[type="password"],
+input[type="number"],
 select {
   width: 100%;
   font: inherit;
@@ -590,6 +592,16 @@ button.danger:hover:not(:disabled) {
 .settings-actions {
   padding-top: 12px;
   border-top: 1px solid var(--border);
+}
+
+.apikey-note {
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 0;
+}
+
+.apikey-note:empty {
+  display: none;
 }
 
 .space-detail {

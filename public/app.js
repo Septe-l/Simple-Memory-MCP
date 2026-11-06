@@ -105,7 +105,7 @@ function debounce(fn, ms) {
 /* ---------- 設定パネル ---------- */
 
 function readSpaceEditor(node) {
-  return {
+  const space = {
     id: node.dataset.id,
     enabled: node.querySelector(".space-enabled input").checked,
     language: node.querySelector(".space-language").value,
@@ -114,6 +114,31 @@ function readSpaceEditor(node) {
     queryPrefix: node.querySelector(".space-qprefix").value,
     documentPrefix: node.querySelector(".space-dprefix").value,
   };
+  // トークンは触ったときだけ送る。送らなければサーバー側の保存値がそのまま使われる。
+  // (サーバーはトークンを返さないので、ここで空欄を送ると消えてしまう)
+  if (node.dataset.apiKeyDirty === "1") {
+    space.apiKey = node.querySelector(".space-apikey").value.trim();
+  }
+  return space;
+}
+
+/** トークン欄の下の説明文を、保存状態と入力状態に合わせて書き換える。 */
+function renderApiKeyNote(node) {
+  const note = node.querySelector(".apikey-note");
+  const input = node.querySelector(".space-apikey");
+  const dirty = node.dataset.apiKeyDirty === "1";
+  const stored = node.dataset.apiKeySet === "1";
+  const urlChanged = node.querySelector(".space-url").value.trim().replace(/\/+$/, "") !== node.dataset.savedUrl;
+
+  if (dirty) {
+    note.textContent = input.value.trim() === "" ? "保存するとトークンを削除します" : "保存すると新しいトークンに置き換えます";
+  } else if (stored && urlChanged) {
+    note.textContent = "接続先を変えたため、保存済みのトークンは使われません。新しい接続先用に入力し直してください";
+  } else if (stored) {
+    note.textContent = `設定済み${node.dataset.apiKeyHint ? `（${node.dataset.apiKeyHint}）` : ""}。変更するときだけ入力してください`;
+  } else {
+    note.textContent = "";
+  }
 }
 
 function setSpaceStatus(node, { text, kind, detail }) {
@@ -133,6 +158,36 @@ function renderSpaceEditor(space) {
   node.querySelector(".space-model").value = space.model;
   node.querySelector(".space-qprefix").value = space.queryPrefix;
   node.querySelector(".space-dprefix").value = space.documentPrefix;
+
+  /* --- API トークン --- */
+  // 保存済みのトークンはサーバーから返ってこない。欄は常に空で始め、設定済みかどうかだけ表示する。
+  const apiKeyInput = node.querySelector(".space-apikey");
+  node.dataset.apiKeySet = space.apiKeySet ? "1" : "0";
+  node.dataset.apiKeyHint = space.apiKeyHint ?? "";
+  node.dataset.apiKeyDirty = "0";
+  node.dataset.savedUrl = space.baseUrl;
+  apiKeyInput.placeholder = space.apiKeySet
+    ? "●●●●●●●●"
+    : "未設定（認証を使わない場合は空のまま）";
+  node.querySelector(".clear-apikey").hidden = !space.apiKeySet;
+
+  apiKeyInput.addEventListener("input", () => {
+    node.dataset.apiKeyDirty = "1";
+    renderApiKeyNote(node);
+  });
+  node.querySelector(".toggle-apikey").addEventListener("click", (event) => {
+    const showing = apiKeyInput.type === "text";
+    apiKeyInput.type = showing ? "password" : "text";
+    event.currentTarget.textContent = showing ? "表示" : "隠す";
+  });
+  node.querySelector(".clear-apikey").addEventListener("click", () => {
+    apiKeyInput.value = "";
+    apiKeyInput.placeholder = "（保存すると削除されます）";
+    node.dataset.apiKeyDirty = "1";
+    renderApiKeyNote(node);
+  });
+  node.querySelector(".space-url").addEventListener("input", () => renderApiKeyNote(node));
+  renderApiKeyNote(node);
 
   const modelInput = node.querySelector(".space-model");
   const datalist = node.querySelector(".space-models");
@@ -154,9 +209,13 @@ function renderSpaceEditor(space) {
   });
 
   node.querySelector(".fetch-models").addEventListener("click", async () => {
-    const baseUrl = node.querySelector(".space-url").value.trim();
+    const { id, baseUrl, apiKey } = readSpaceEditor(node);
     try {
-      const { models } = await api(`/api/settings/models?baseUrl=${encodeURIComponent(baseUrl)}`);
+      // トークンを URL に載せないよう POST で送る
+      const { models } = await api("/api/settings/models", {
+        method: "POST",
+        body: JSON.stringify({ id, baseUrl, ...(apiKey !== undefined ? { apiKey } : {}) }),
+      });
       datalist.replaceChildren(
         ...models.map((m) => {
           const opt = document.createElement("option");
@@ -257,6 +316,8 @@ els.saveSettings.addEventListener("click", async () => {
       }),
     });
     state.settings = data.settings;
+    // 保存後は欄を作り直し、トークン欄を「未変更」の状態に戻す
+    els.spaceEditors.replaceChildren(...data.settings.spaces.map(renderSpaceEditor));
     els.systemPrompt.value = data.systemPrompt ?? els.systemPrompt.value;
     renderIndexInfo(data.index);
     const stale = data.index.filter((i) => i.enabled && i.stale > 0);
@@ -537,7 +598,8 @@ async function checkHealth() {
       els.statusText.textContent = `記憶 ${stats.total} 件 · ⚠ ${bad.map((s) => s.id).join(", ")} に問題`;
       els.status.title = bad.map((s) => `${s.id}: ${s.detail}`).join("\n");
       for (const s of bad) {
-        if (s.modelMismatch) toast(`[${s.id}] ${s.detail}`, "error");
+        // モデル不一致と認証エラーは、気付かないと記憶が保存されないので目立たせる
+        if (s.modelMismatch || /HTTP 40[13]/.test(s.detail)) toast(`[${s.id}] ${s.detail}`, "error");
       }
     }
   } catch (err) {

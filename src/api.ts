@@ -1,11 +1,18 @@
 import { Router } from "express";
 import { z } from "zod";
-import { bootConfig, guessPrefixes, MEMORY_LEVELS, memoryLevelInfo, recommendedSystemPrompt } from "./config.ts";
+import {
+  bootConfig,
+  type EmbeddingSpaceSettings,
+  guessPrefixes,
+  MEMORY_LEVELS,
+  memoryLevelInfo,
+  recommendedSystemPrompt,
+} from "./config.ts";
 import type { MemoryStore } from "./db.ts";
-import { checkSpace } from "./embeddings.ts";
+import { authHeaders, checkSpace, describeHttpError } from "./embeddings.ts";
 import { searchMemories } from "./search.ts";
 import { addMemory, indexStatus, reindex, updateMemory } from "./service.ts";
-import type { SettingsStore } from "./settings.ts";
+import { type SettingsStore, toPublicSettings } from "./settings.ts";
 
 const createSchema = z.object({
   content: z.string().min(1, "内容を入力してください"),
@@ -33,6 +40,24 @@ const spaceSchema = z.object({
   documentPrefix: z.string().optional(),
 });
 
+const modelsSchema = z.object({
+  id: z.enum(["primary", "secondary"]).optional(),
+  baseUrl: z.string().min(1, "baseUrl が必要です"),
+  apiKey: z.string().optional(),
+});
+
+/**
+ * 接続テストやモデル一覧で使うトークンを決める。
+ *
+ * リクエストで明示されていればそれを使う。省略時は保存済みのトークンを補うが、
+ * それは保存済みの接続先と同じ URL に対してだけにする。WebUI には認証が無いので、
+ * URL だけ差し替えて叩けば保存済みトークンを任意のホストへ送らせられてしまうため。
+ */
+function resolveApiKey(stored: EmbeddingSpaceSettings | undefined, baseUrl: string, provided: string | undefined): string {
+  if (provided !== undefined) return provided.trim();
+  return stored && stored.baseUrl === baseUrl ? stored.apiKey : "";
+}
+
 const settingsSchema = z.object({
   spaces: z.array(spaceSchema).optional(),
   semanticWeight: z.number().min(0).max(5).optional(),
@@ -52,7 +77,7 @@ export function createApiRouter(store: MemoryStore, settings: SettingsStore): Ro
 
   router.get("/settings", (_req, res) => {
     res.json({
-      settings: settings.get(),
+      settings: toPublicSettings(settings.get()),
       index: indexStatus(store, settings),
       memoryLevels: MEMORY_LEVELS,
       systemPrompt: recommendedSystemPrompt(memoryLevelInfo(settings.get().memoryLevel)),
@@ -67,7 +92,7 @@ export function createApiRouter(store: MemoryStore, settings: SettingsStore): Ro
     }
     const next = settings.update(parsed.data);
     res.json({
-      settings: next,
+      settings: toPublicSettings(next),
       index: indexStatus(store, settings),
       systemPrompt: recommendedSystemPrompt(memoryLevelInfo(next.memoryLevel)),
     });
@@ -77,7 +102,7 @@ export function createApiRouter(store: MemoryStore, settings: SettingsStore): Ro
   router.post("/settings/reset", (_req, res) => {
     const next = settings.reset();
     res.json({
-      settings: next,
+      settings: toPublicSettings(next),
       index: indexStatus(store, settings),
       systemPrompt: recommendedSystemPrompt(memoryLevelInfo(next.memoryLevel)),
     });
@@ -95,12 +120,14 @@ export function createApiRouter(store: MemoryStore, settings: SettingsStore): Ro
       res.status(404).json({ error: "その空間はありません" });
       return;
     }
+    const baseUrl = (parsed.data.baseUrl ?? current.baseUrl).trim().replace(/\/+$/, "");
     res.json(
       await checkSpace({
         ...current,
         ...parsed.data,
         enabled: true,
-        baseUrl: (parsed.data.baseUrl ?? current.baseUrl).replace(/\/+$/, ""),
+        baseUrl,
+        apiKey: resolveApiKey(current, baseUrl, parsed.data.apiKey),
       }),
     );
   });
@@ -110,17 +137,27 @@ export function createApiRouter(store: MemoryStore, settings: SettingsStore): Ro
     res.json(guessPrefixes(String(req.query.model ?? "")));
   });
 
-  /** バックエンドが提供しているモデル一覧 (OpenAI 互換の /models)。 */
-  router.get("/settings/models", async (req, res) => {
-    const baseUrl = String(req.query.baseUrl ?? "").replace(/\/+$/, "");
-    if (!baseUrl) {
-      res.status(400).json({ error: "baseUrl が必要です" });
+  /**
+   * バックエンドが提供しているモデル一覧 (OpenAI 互換の /models)。
+   * トークンを URL に載せないよう POST で受け取る。
+   */
+  router.post("/settings/models", async (req, res) => {
+    const parsed = modelsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: z.prettifyError(parsed.error) });
       return;
     }
+    const baseUrl = parsed.data.baseUrl.trim().replace(/\/+$/, "");
+    const stored = parsed.data.id ? settings.space(parsed.data.id) : undefined;
+    const apiKey = resolveApiKey(stored, baseUrl, parsed.data.apiKey);
     try {
-      const upstream = await fetch(`${baseUrl}/models`, { signal: AbortSignal.timeout(10_000) });
+      const upstream = await fetch(`${baseUrl}/models`, {
+        headers: authHeaders(apiKey),
+        signal: AbortSignal.timeout(10_000),
+      });
       if (!upstream.ok) {
-        res.status(502).json({ error: `HTTP ${upstream.status}` });
+        const body = await upstream.text().catch(() => "");
+        res.status(502).json({ error: describeHttpError(upstream.status, body, { apiKey, baseUrl, model: "" }) });
         return;
       }
       const json = (await upstream.json()) as { data?: { id?: string }[] };

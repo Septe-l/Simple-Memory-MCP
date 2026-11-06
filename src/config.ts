@@ -164,7 +164,11 @@ export function memoryLevelInfo(level: number): MemoryLevelInfo {
 }
 
 const defaultBaseUrl = (process.env.EMBEDDING_BASE_URL ?? "http://localhost:1234/v1").replace(/\/+$/, "");
-const defaultApiKey = process.env.EMBEDDING_API_KEY ?? "lm-studio";
+/**
+ * 埋め込みサーバーの API トークン。空なら Authorization ヘッダを送らない。
+ * LM Studio で「API トークンを要求する」設定を有効にしている場合に必要。
+ */
+const defaultApiKey = (process.env.EMBEDDING_API_KEY ?? "").trim();
 
 function spaceFromEnv(
   id: SpaceId,
@@ -179,7 +183,7 @@ function spaceFromEnv(
     language: (["multilingual", "ja", "en"].includes(language) ? language : defaults.language) as SpaceLanguage,
     enabled: (process.env[`EMBEDDING_${upper}_ENABLED`] ?? String(defaults.enabled)) !== "false",
     baseUrl: (process.env[`EMBEDDING_${upper}_BASE_URL`] ?? defaultBaseUrl).replace(/\/+$/, ""),
-    apiKey: process.env[`EMBEDDING_${upper}_API_KEY`] ?? defaultApiKey,
+    apiKey: (process.env[`EMBEDDING_${upper}_API_KEY`] ?? defaultApiKey).trim(),
     model,
     queryPrefix: process.env[`EMBEDDING_${upper}_QUERY_PREFIX`] ?? guessed.query,
     documentPrefix: process.env[`EMBEDDING_${upper}_DOCUMENT_PREFIX`] ?? guessed.document,

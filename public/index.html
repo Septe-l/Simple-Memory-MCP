@@ -181,6 +181,21 @@
             <datalist class="space-models"></datalist>
           </label>
           <label class="field">
+            <span>API トークン</span>
+            <span class="model-row">
+              <input
+                class="space-apikey"
+                type="password"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="未設定（認証を使わない場合は空のまま）"
+              />
+              <button type="button" class="ghost toggle-apikey" title="入力中のトークンを表示/非表示">表示</button>
+              <button type="button" class="ghost clear-apikey" title="保存済みのトークンを削除">削除</button>
+            </span>
+            <span class="muted apikey-note"></span>
+          </label>
+          <label class="field">
             <span>モデルの対応言語</span>
             <select class="space-language">
               <option value="multilingual">多言語（日英どちらも）</option>

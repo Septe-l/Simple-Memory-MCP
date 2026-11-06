@@ -6,7 +6,7 @@
  * API のレスポンスはキャッシュしない — 古い記憶を表示すると混乱を招くため。
  */
 
-const VERSION = "v1";
+const VERSION = "v2";
 const SHELL_CACHE = `shell-${VERSION}`;
 
 // スコープ基準の相対パス。/webui/ 配下でも別の場所に置いても動くようにする。

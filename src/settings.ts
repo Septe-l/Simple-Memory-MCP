@@ -21,6 +21,36 @@ function str(value: unknown, fallback: string): string {
   return typeof value === "string" ? value : fallback;
 }
 
+/**
+ * 以前の版は既定値としてダミーの "lm-studio" を入れていた。
+ * 認証を有効にした LM Studio に送ると「不正なトークン」で 401 になるため、未設定扱いに戻す。
+ */
+const LEGACY_PLACEHOLDER_KEY = "lm-studio";
+
+function normalizeApiKey(value: string): string {
+  const trimmed = value.trim();
+  return trimmed === LEGACY_PLACEHOLDER_KEY ? "" : trimmed;
+}
+
+/** WebUI に返す形。トークンそのものは返さず、設定済みかどうかと末尾数文字だけを見せる。 */
+export type PublicSpaceSettings = Omit<EmbeddingSpaceSettings, "apiKey"> & {
+  apiKeySet: boolean;
+  apiKeyHint: string | null;
+};
+export type PublicSettings = Omit<AppSettings, "spaces"> & { spaces: PublicSpaceSettings[] };
+
+export function toPublicSettings(settings: AppSettings): PublicSettings {
+  return {
+    ...settings,
+    spaces: settings.spaces.map(({ apiKey, ...rest }) => ({
+      ...rest,
+      apiKeySet: apiKey !== "",
+      // 短いトークンは末尾を見せるだけでも推測の足しになるので伏せる
+      apiKeyHint: apiKey.length >= 12 ? `…${apiKey.slice(-4)}` : null,
+    })),
+  };
+}
+
 /** 外から来た JSON を、欠けた項目を既定値で補いながら AppSettings に整える。 */
 function coerce(raw: unknown, base: AppSettings): AppSettings {
   const obj = (raw ?? {}) as Partial<AppSettings>;
@@ -42,12 +72,22 @@ function coerce(raw: unknown, base: AppSettings): AppSettings {
       ? (found.language as SpaceLanguage)
       : fallback.language;
 
+    const baseUrl = str(found.baseUrl, fallback.baseUrl).trim().replace(/\/+$/, "");
+    // 接続先を変えたのにトークンが指定されていなければ、旧トークンは引き継がない。
+    // 引き継ぐと、URL を書き換えるだけでトークンを別ホストへ送らせられるため。
+    const apiKey =
+      found.apiKey !== undefined
+        ? normalizeApiKey(str(found.apiKey, ""))
+        : baseUrl !== fallback.baseUrl
+          ? ""
+          : fallback.apiKey;
+
     return {
       id: fallback.id,
       language,
       enabled: typeof found.enabled === "boolean" ? found.enabled : fallback.enabled,
-      baseUrl: str(found.baseUrl, fallback.baseUrl).trim().replace(/\/+$/, ""),
-      apiKey: str(found.apiKey, fallback.apiKey),
+      baseUrl,
+      apiKey,
       model,
       queryPrefix:
         found.queryPrefix !== undefined

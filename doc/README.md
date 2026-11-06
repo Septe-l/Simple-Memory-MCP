@@ -124,6 +124,23 @@ WebUI 右上の **⚙ 設定** から、サーバー URL・モデル・接頭辞
 llama-server -m /path/to/model.gguf --embeddings --host 0.0.0.0 --port 8081
 ```
 
+### API トークン認証
+
+LM Studio の Developer → Server Settings で「API トークンを要求する」を有効にしている場合は、発行したトークンを設定画面の **API トークン** 欄に入力して保存してください。`Authorization: Bearer <トークン>` として送られます。
+
+- トークンは発行時に一度しか表示されないので、そのとき控えておいてください
+- LM Studio ではトークンごとに権限を設定できます。埋め込みの生成とモデル一覧の取得ができる権限が必要です（足りないと HTTP 403 になります）
+- 認証を使わない場合は空のままで構いません。空ならヘッダ自体を送りません
+
+**トークンの扱い**
+
+- WebUI と REST API は保存済みのトークンを**返しません**。画面には「設定済み」と末尾4文字だけが表示されます。変更するときだけ入力し、「削除」で消せます
+- 保存済みのトークンは**保存済みの接続先にしか送りません**。接続先 URL を変えて保存したときは、トークンを入力し直さない限り旧トークンは破棄されます。接続テストやモデル一覧で別の URL を指定した場合も同様です。WebUI に認証が無いため、URL だけ書き換えてトークンを別ホストへ送らせる操作を防ぐためです
+- 認証エラーのとき LM Studio は送られたトークンの一部を本文に含めて返すため、その本文はログにも画面にも出しません。「未設定」「形式が不正」「無効」「権限不足」のどれかに分類して表示します
+- トークンは SQLite（`data/memory.db` / Docker では volume）に平文で保存されます。バックアップを共有するときは注意してください
+
+環境変数で渡す場合は `.env` に `EMBEDDING_API_KEY=...` と書き、設定画面の **既定値に戻す** を押すと反映されます（一度 WebUI で保存した後は DB の値が優先されるため）。
+
 ### 接頭辞（プレフィックス）
 
 モデルによっては、クエリ側と文書側に決まった接頭辞を付けないと精度が大きく落ちます。モデル名から自動判別しますが、設定画面で上書きできます。
@@ -200,7 +217,8 @@ llama-server -m /path/to/model.gguf --embeddings --host 0.0.0.0 --port 8081
 | `MEMORY_MCP_PORT` | `8080` | 待ち受けポート |
 | `MEMORY_DB_PATH` | `data/memory.db` | SQLite ファイルの場所（Docker では `/data/memory.db`） |
 | `EMBEDDING_BASE_URL` | `http://localhost:1234/v1` | 埋め込みサーバーの既定 URL |
-| `EMBEDDING_API_KEY` | `lm-studio` | 認証が必要な場合のみ |
+| `EMBEDDING_API_KEY` | （空） | LM Studio の API トークン。空なら認証ヘッダを送らない |
+| `EMBEDDING_{PRIMARY,SECONDARY}_API_KEY` | `EMBEDDING_API_KEY` | 空間ごとに別のトークンを使う場合 |
 | `EMBEDDING_PRIMARY_MODEL` | `text-embedding-multilingual-e5-large-instruct` | 主空間のモデル |
 | `EMBEDDING_PRIMARY_LANGUAGE` | `multilingual` | `multilingual` / `ja` / `en` |
 | `EMBEDDING_SECONDARY_ENABLED` | `false` | 副空間を使うか |
@@ -223,7 +241,7 @@ llama-server -m /path/to/model.gguf --embeddings --host 0.0.0.0 --port 8081
 | `PUT` | `/api/settings` | 設定を更新 |
 | `POST` | `/api/settings/reset` | 環境変数の既定値に戻す |
 | `POST` | `/api/settings/test` | 保存せずに疎通確認 |
-| `GET` | `/api/settings/models?baseUrl=` | サーバーのモデル一覧 |
+| `POST` | `/api/settings/models` | サーバーのモデル一覧（`{"id","baseUrl","apiKey?"}`。トークンを URL に載せないため POST） |
 | `GET` | `/api/settings/prefixes?model=` | モデル名から推奨接頭辞 |
 | `GET` | `/api/memories?q=&tag=&limit=&offset=&sort=` | `q` があれば検索、無ければ一覧 |
 | `GET` | `/api/memories/:id` | 1 件取得 |

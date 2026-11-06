@@ -15,6 +15,37 @@ function normalize(vec: number[]): Float32Array {
   return out;
 }
 
+/** トークンが設定されているときだけ Authorization ヘッダを付ける。 */
+export function authHeaders(apiKey: string, base: Record<string, string> = {}): Record<string, string> {
+  return apiKey ? { ...base, Authorization: `Bearer ${apiKey}` } : base;
+}
+
+/**
+ * HTTP エラーを、利用者が次に何をすべきか分かる文にする。
+ *
+ * 認証エラーのとき LM Studio は送られたトークンの一部を本文に含めて返すため、
+ * 401/403 では本文をそのまま表示・ログ出力せず、種類だけを判定して伝える。
+ */
+export function describeHttpError(
+  status: number,
+  body: string,
+  space: Pick<EmbeddingSpaceSettings, "apiKey" | "model" | "baseUrl">,
+): string {
+  if (status === 401) {
+    if (!space.apiKey || /none was provided|required/i.test(body)) {
+      return `認証が必要です (HTTP 401)。${space.baseUrl} は API トークンを要求しています。設定画面で API トークンを入力してください。`;
+    }
+    if (/malformed/i.test(body)) {
+      return "API トークンの形式が正しくありません (HTTP 401)。LM Studio で発行したトークンを、前後の空白を含めずにそのまま貼り付けてください。";
+    }
+    return "API トークンが無効です (HTTP 401)。失効していないか、別のサーバー用のトークンでないかを確認してください。";
+  }
+  if (status === 403) {
+    return "API トークンにこの操作の権限がありません (HTTP 403)。LM Studio でトークンの権限設定を確認してください。";
+  }
+  return `埋め込みの生成に失敗しました (HTTP ${status})。モデル "${space.model}" が読み込まれているか確認してください。${body.slice(0, 300)}`;
+}
+
 /** 記憶を保存するとき (document) と検索するとき (query) で接頭辞が変わる。 */
 export type EmbedKind = "query" | "document";
 
@@ -39,10 +70,7 @@ export async function embedBatch(
 
   const res = await fetch(`${space.baseUrl}/embeddings`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${space.apiKey}`,
-    },
+    headers: authHeaders(space.apiKey, { "Content-Type": "application/json" }),
     body: JSON.stringify({ model: space.model, input }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
   }).catch((err: unknown) => {
@@ -53,9 +81,7 @@ export async function embedBatch(
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new EmbeddingError(
-      `埋め込みの生成に失敗しました (HTTP ${res.status})。モデル "${space.model}" が読み込まれているか確認してください。${body.slice(0, 300)}`,
-    );
+    throw new EmbeddingError(describeHttpError(res.status, body, space));
   }
 
   const json = (await res.json()) as EmbeddingResponse;
